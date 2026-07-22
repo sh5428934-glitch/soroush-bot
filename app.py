@@ -2,16 +2,14 @@ from flask import Flask, request, jsonify
 import asyncio
 import threading
 from datetime import datetime
-from spluspy import SoroushClient, events
+from spluspy import Client, events
 from spluspy.tl.functions.account import UpdateProfileRequest
 import os
 
 app = Flask(__name__)
 
-# تنظیمات
 PHONE = "+989922742686"
 
-# وضعیت
 bot_status = {
     "running": False,
     "connected": False,
@@ -22,7 +20,6 @@ bot_status = {
     "code_needed": False
 }
 
-# متغیرهای موقت
 phone_code_hash = None
 pending_code = None
 
@@ -36,21 +33,18 @@ class ClockBot:
     async def start(self):
         global phone_code_hash
         
-        self.client = SoroushClient("/tmp/session.session")
+        self.client = Client("/tmp/session.session")
         await self.client.connect()
         
         try:
             await self.client.start(phone=PHONE)
         except:
-            # نیاز به کد تایید
             bot_status['waiting_code'] = True
             bot_status['code_needed'] = True
             
-            # ارسال کد
             result = await self.client.send_code_request(PHONE)
             phone_code_hash = result.phone_code_hash
             
-            # صبر کن تا کاربر کد رو از API بفرسته
             while pending_code is None:
                 await asyncio.sleep(1)
             
@@ -80,7 +74,7 @@ class ClockBot:
                     await self.client.send_message(chat, "🟢 ساعت فعال شد", reply_to=event.id)
             
             elif text == ".پنل":
-                panel = f"""━━━━━━━━━━━━━━━━━━━━
+                panel = """━━━━━━━━━━━━━━━━━━━━
 📋 پنل سلف‌بات
 ━━━━━━━━━━━━━━━━━━━━
 🕐 .ساعت → فعال/غیرفعال
@@ -115,10 +109,6 @@ class ClockBot:
                 pass
             await asyncio.sleep(10)
 
-# ============================================================
-# Flask Routes
-# ============================================================
-
 @app.route('/')
 def home():
     return jsonify(bot_status)
@@ -129,51 +119,33 @@ def ping():
 
 @app.route('/api/send-code')
 def send_code():
-    """ارسال کد تایید"""
-    global phone_code_hash, bot_status
-    
+    global phone_code_hash
     async def send():
         global phone_code_hash
-        client = SoroushClient("/tmp/session2.session")
+        client = Client("/tmp/session2.session")
         await client.connect()
         result = await client.send_code_request(PHONE)
         phone_code_hash = result.phone_code_hash
         await client.disconnect()
         return result
-    
     loop = asyncio.new_event_loop()
     result = loop.run_until_complete(send())
     loop.close()
-    
     bot_status['waiting_code'] = True
-    
     return jsonify({
         "success": True,
-        "message": f"کد تایید به {PHONE} ارسال شد",
-        "phone_code_hash": result.phone_code_hash[:10] + "..."
+        "message": f"کد تایید به {PHONE} ارسال شد"
     })
 
 @app.route('/api/verify-code', methods=['POST'])
 def verify_code():
-    """تایید کد"""
-    global pending_code, phone_code_hash
-    
+    global pending_code
     data = request.json
     code = data.get('code', '')
-    
     if not code:
         return jsonify({"success": False, "error": "کد رو وارد کن"})
-    
     pending_code = code
-    
-    return jsonify({
-        "success": True,
-        "message": "کد دریافت شد. در حال لاگین..."
-    })
-
-# ============================================================
-# اجرای سلف‌بات
-# ============================================================
+    return jsonify({"success": True, "message": "کد دریافت شد"})
 
 def run_bot():
     bot = ClockBot()

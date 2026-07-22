@@ -1,4 +1,4 @@
 flask
 gunicorn
-spluspy
+spluspy>=2.2.2
 pyaes
